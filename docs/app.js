@@ -26,9 +26,10 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Клики по кнопкам оплаты — главная метрика теста
-  document.querySelectorAll('[data-goal="pay_click"]').forEach(function (el) {
+  document.querySelectorAll('[data-goal]').forEach(function (el) {
     el.addEventListener('click', function () {
-      goal(goalName);
+      // Цель берём из атрибута: pay_click для 299, pay_click_690 для срочного тарифа
+      goal(el.getAttribute('data-goal') || goalName);
     });
   });
 
