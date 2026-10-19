@@ -65,6 +65,11 @@ p{margin:0 0 1em}
 @media (max-width:860px){.cards{grid-template-columns:1fr}}
 .card{border:1px solid var(--line);border-radius:var(--radius);padding:22px;background:#fff}
 .card p{margin:0;color:var(--ink-soft);font-size:15.5px}
+.cards--2{grid-template-columns:repeat(2,1fr)}
+@media (max-width:860px){.cards--2{grid-template-columns:1fr}}
+.tariff__price{font-size:30px;font-weight:700;color:var(--accent);letter-spacing:-.02em;margin:0 0 6px}
+.card__action{margin:18px 0 0}
+.card__action .btn{padding:12px 20px;font-size:15.5px}
 
 .steps{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:16px}
 .steps li{display:flex;gap:16px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px}

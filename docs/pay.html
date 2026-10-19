@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Оплата 299 ₽ — сжатие PDF под лимит</title>
+<title>Оплата — сжатие PDF под лимит</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2712%27 fill=%27%23123a6b%27/%3E%3Ctext x=%2732%27 y=%2744%27 font-family=%27Arial%27 font-size=%2734%27 fill=%27white%27 text-anchor=%27middle%27%3EP%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
@@ -18,8 +18,8 @@
 
 <main class="pay">
   <div class="wrap">
-    <h1>Оплата 299 ₽</h1>
-    <p class="lead">Один платёж, один документ. Без подписки и регистрации.</p>
+    <h1>Оплата <span id="price">299</span> ₽</h1>
+    <p class="lead" id="tariff-lead">Один платёж, один документ. Без подписки и регистрации.</p>
 
     <div class="pay__grid">
       <form class="panel" id="pay-form" novalidate>
@@ -38,12 +38,14 @@
 
       <aside class="panel panel--sum">
         <h2>Что входит</h2>
-        <div class="sum"><span>Сжатие одного PDF</span><span>299 ₽</span></div>
+        <div class="sum"><span id="sum-item">Сжатие одного PDF</span><span id="sum-price">299 ₽</span></div>
         <div class="sum"><span>Точный лимит (2–30 МБ)</span><span>входит</span></div>
         <div class="sum"><span>Обработка в браузере</span><span>входит</span></div>
+        <div class="sum" id="row-priority" hidden><span>Срочно и гарантия приёмки</span><span>входит</span></div>
         <div class="sum"><span>Повторное скачивание, 24 ч</span><span>входит</span></div>
-        <div class="sum sum--total"><span>Итого</span><span>299 ₽</span></div>
+        <div class="sum sum--total"><span>Итого</span><span id="sum-total">299 ₽</span></div>
         <p class="note">Если файл не уложится в лимит при читаемом качестве — платить не нужно, мы покажем это до оплаты.</p>
+        <p class="note"><a href="index.html#tariffs">Другой тариф</a></p>
       </aside>
     </div>
   </div>
