@@ -5,7 +5,7 @@
 ## Локальный запуск
 
 ```bash
-cd ~/projects/pdf-limit/site
+cd ~/projects/pdf-limit/docs
 python3 -m http.server 8099
 # открыть http://127.0.0.1:8099/
 ```
@@ -19,8 +19,8 @@ python3 -m http.server 8099
 
 ## Публикация
 
-Вариант А — GitHub Pages: репозиторий → Settings → Pages → Deploy from branch `main`, папка `/site`.
-Вариант Б — любой статический хостинг (Cloudflare Pages, Netlify): корень публикации — папка `site/`.
+Вариант А — GitHub Pages: репозиторий → Settings → Pages → Deploy from branch `main`, папка `/docs`.
+Вариант Б — любой статический хостинг (Cloudflare Pages, Netlify): корень публикации — папка `docs/`.
 
 Домен лучше свой: и для модерации объявлений, и потому что `<login>.github.io` снижает доверие в нише с паспортами.
 
