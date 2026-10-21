@@ -1,5 +1,5 @@
 /* Аналитика и поведение тестового лендинга. YM_ID = 0 — счётчик не подключён. */
-var YM_ID = 0;
+var YM_ID = window.YM_ID || 0;
 
 function goal(name) {
   if (YM_ID && typeof window.ym === 'function') {
@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      goal(goalName);
+      goal('pay_submit');
       status.textContent = 'Оплата подключается. Мы напишем на ' + email.value + ', когда можно будет сжать файл.';
       status.classList.add('status--show');
       var btn = document.getElementById('pay-btn');
