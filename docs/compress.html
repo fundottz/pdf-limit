@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сжать PDF под лимит — бесплатно, в браузере</title>
+<meta name="description" content="Сожмите PDF под лимит Госуслуг, суда, ФНС. Текст сохраняется, файл не покидает браузер.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2712%27 fill=%27%23123a6b%27/%3E%3Ctext x=%2732%27 y=%2744%27 font-family=%27Arial%27 font-size=%2734%27 fill=%27white%27 text-anchor=%27middle%27%3EP%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+<script type="text/javascript">
+  window.YM_ID = 113715662;
+  (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+  m[i].l=1*new Date();
+  for (var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
+  k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+  (window,document,"script","https://mc.yandex.ru/metrika/tag.js","ym");
+  ym(window.YM_ID,"init",{clickmap:true,trackLinks:true,accurateTrackBounce:true,webvisor:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/113715662" style="position:absolute;left:-9999px" alt=""></div></noscript>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top__in">
+    <a class="logo" href="index.html">PDF<span>·</span>Лимит</a>
+    <nav class="top__nav"><a href="index.html">На главную</a></nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" style="padding-bottom:16px">
+    <div class="wrap">
+      <h1>Сжать PDF под лимит</h1>
+      <p class="lead">Бесплатно, в браузере. Текст и вектор сохраняются, сжимаются только изображения. Файл никуда не загружается.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="wrap" style="max-width:640px">
+      <div style="background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:20px">
+        <label for="file" style="display:block;font-weight:600;margin-bottom:6px">Ваш PDF</label>
+        <input type="file" id="file" accept="application/pdf" style="width:100%;padding:10px;border:1px solid #e5e5e5;border-radius:8px">
+        <div style="margin-top:14px">
+          <label for="limit" style="display:block;font-weight:600;margin-bottom:6px">Лимит приёмной системы</label>
+          <select id="limit" style="width:100%;padding:10px;border:1px solid #e5e5e5;border-radius:8px">
+            <option value="2">ФНС — 2 МБ</option>
+            <option value="5" selected>Госуслуги — 5 МБ</option>
+            <option value="10">Вуз — 10 МБ</option>
+            <option value="30">Суд / Мой арбитр — 30 МБ</option>
+          </select>
+        </div>
+        <button id="go" disabled style="margin-top:16px;width:100%;padding:14px;border:0;border-radius:10px;background:#1f6feb;color:#fff;font:inherit;font-weight:600;cursor:pointer;opacity:.5">Сжать</button>
+        <div id="status" style="margin-top:14px;font-size:14px;color:#666;min-height:20px"></div>
+        <div id="result" style="display:none;margin-top:16px;padding:16px;border-radius:10px;background:#f0f7f2;border:1px solid #cfe8d6"></div>
+        <p style="font-size:13px;color:#666;margin-top:12px">Обработка локальная (Ghostscript в WebAssembly). Первый запуск грузит ~14 МБ — дальше из кэша. Ниже 72 dpi не опускаемся: если в лимит не влезает при читаемом качестве — честно скажем.</p>
+      </div>
+      <p style="margin-top:16px;font-size:14px;color:#666">Нужна гарантия приёмки, срочность или файл 30+ МБ? <a href="pay.html">Тарифы</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <span>PDF·Лимит</span>
+    <nav>
+      <a href="privacy.html">Политика конфиденциальности</a>
+      <a href="mailto:mail@podlimit.ru">mail@podlimit.ru</a>
+    </nav>
+    <span class="foot__c">2026</span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script>
+(function () {
+  // Самохостед: wasm и обёртка лежат рядом, в /gs/ на этом же домене.
+  var GS_BASE = new URL('gs/', document.baseURI).href;
+  var DPIS = [150, 120, 96, 72]; // порог читаемости — не ниже 72 dpi
+
+  function gsRun(inputBytes, dpi) {
+    var args = [
+      '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.5', '-dPDFSETTINGS=/ebook',
+      '-dDownsampleColorImages=true', '-dColorImageResolution=' + dpi, '-dColorImageDownsampleType=/Bicubic',
+      '-dDownsampleGrayImages=true', '-dGrayImageResolution=' + dpi,
+      '-dDownsampleMonoImages=true', '-dMonoImageResolution=' + dpi,
+      '-dAutoRotatePages=/None', '-dNOPAUSE', '-dQUIET', '-dBATCH',
+      '-sOutputFile=output.pdf', 'input.pdf'
+    ];
+    var src = "self.Module={locateFile:function(p){return '" + GS_BASE + "'+p;},preRun:[function(){self.Module.FS.writeFile('input.pdf',new Uint8Array(self.__input));}],postRun:[function(){var u=self.Module.FS.readFile('output.pdf',{encoding:'binary'});var buf=(u.byteOffset===0&&u.byteLength===u.buffer.byteLength)?u.buffer:u.slice().buffer;self.postMessage({ok:true,bytes:buf},[buf]);}],arguments:" + JSON.stringify(args) + ",print:function(){},printErr:function(){},noExitRuntime:1};" +
+      "self.onmessage=async function(e){self.__input=e.data;try{await import('" + GS_BASE + "gs-worker.js');}catch(err){self.postMessage({err:String(err)});}};";
+    var w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    return new Promise(function (resolve, reject) {
+      var to = setTimeout(function () { try { w.terminate(); } catch (e) {} reject(new Error('gs timeout')); }, 120000);
+      w.onmessage = function (ev) {
+        clearTimeout(to); w.terminate();
+        if (ev.data.err) reject(new Error(ev.data.err)); else resolve(new Uint8Array(ev.data.bytes));
+      };
+      w.onerror = function (ev) { clearTimeout(to); try { w.terminate(); } catch (e) {} reject(new Error('worker error')); };
+      var ab = inputBytes.buffer.slice(inputBytes.byteOffset, inputBytes.byteOffset + inputBytes.byteLength);
+      w.postMessage(ab, [ab]);
+    });
+  }
+
+  async function compressPdfQuality(inputBytes, targetBytes, onStep) {
+    var src = inputBytes instanceof Uint8Array ? inputBytes : new Uint8Array(inputBytes);
+    if (src.length <= targetBytes) return { bytes: src, mode: 'already fits' };
+    var best = { bytes: src, mode: 'original' };
+    for (var i = 0; i < DPIS.length; i++) {
+      var dpi = DPIS[i];
+      if (onStep) onStep(dpi);
+      var out;
+      try { out = await gsRun(src, dpi); } catch (e) { continue; }
+      if (out.length < best.bytes.length) best = { bytes: out, mode: 'gs ' + dpi + 'dpi' };
+      if (out.length <= targetBytes) return { bytes: out, mode: 'gs ' + dpi + 'dpi' };
+    }
+    return best;
+  }
+
+  var fileEl = document.getElementById('file');
+  var goEl = document.getElementById('go');
+  var statusEl = document.getElementById('status');
+  var resultEl = document.getElementById('result');
+  var buf = null;
+
+  fileEl.addEventListener('change', async function () {
+    var f = fileEl.files[0];
+    if (!f) { goEl.disabled = true; goEl.style.opacity = .5; return; }
+    buf = new Uint8Array(await f.arrayBuffer());
+    goEl.disabled = false; goEl.style.opacity = 1;
+    statusEl.textContent = 'Загружен: ' + f.name + ', ' + (buf.length / 1048576).toFixed(2) + ' МБ';
+  });
+
+  goEl.addEventListener('click', async function () {
+    if (!buf) return;
+    var limitMb = parseInt(document.getElementById('limit').value, 10);
+    var target = limitMb * 1024 * 1024;
+    goEl.disabled = true;
+    resultEl.style.display = 'none';
+    statusEl.textContent = 'Сжимаю… (первый запуск грузит ~14 МБ)';
+    try {
+      var t0 = performance.now();
+      var res = await compressPdfQuality(buf, target, function (dpi) { statusEl.textContent = 'Пробую ' + dpi + ' dpi…'; });
+      var dt = Math.round(performance.now() - t0);
+      var fits = res.bytes.length <= target;
+      var blob = new Blob([res.bytes], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob);
+      resultEl.style.background = fits ? '#f0f7f2' : '#fdf2f1';
+      resultEl.style.borderColor = fits ? '#cfe8d6' : '#f3c9c5';
+      resultEl.innerHTML = '<b>' + (fits ? 'Готово — файл в лимит' : 'Не удалось уложиться при читаемом качестве') + '</b>' +
+        '<div style="font-size:22px;font-weight:700">' + (res.bytes.length / 1048576).toFixed(2) + ' МБ ' + (fits ? '≤ ' + limitMb + ' МБ' : '> ' + limitMb + ' МБ') + '</div>' +
+        '<div style="font-size:13px;color:#666;margin-top:8px">Режим: ' + res.mode + ' · ' + dt + ' мс</div>' +
+        (fits ? '<a href="' + url + '" download="compressed-' + limitMb + 'mb.pdf" style="display:inline-block;margin-top:12px;padding:10px 16px;background:#1a7f37;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Скачать PDF</a>' : '');
+      resultEl.style.display = 'block';
+      statusEl.textContent = '';
+      try { if (window.ym && window.YM_ID) ym(window.YM_ID, 'reachGoal', fits ? 'compress_done' : 'compress_fail'); } catch (e) {}
+    } catch (e) {
+      statusEl.textContent = 'Ошибка: ' + (e && e.message ? e.message : e);
+    } finally {
+      goEl.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

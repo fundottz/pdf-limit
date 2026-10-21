@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сжать PDF под лимит — качество</title>
+<style>
+  :root { --fg:#1a1a1a; --muted:#666; --line:#e5e5e5; --accent:#1f6feb; --ok:#1a7f37; --bad:#b42318; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif; color:var(--fg); background:#fafafa; }
+  .wrap { max-width:640px; margin:0 auto; padding:32px 20px 64px; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  p.sub { color:var(--muted); margin:0 0 24px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
+  label { display:block; font-weight:600; margin-bottom:6px; }
+  select, input[type=file] { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; }
+  button { margin-top:16px; width:100%; padding:14px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .status { margin-top:14px; font-size:14px; color:var(--muted); min-height:20px; }
+  .result { margin-top:16px; padding:16px; border-radius:10px; background:#f0f7f2; border:1px solid #cfe8d6; display:none; }
+  .result.bad { background:#fdf2f1; border-color:#f3c9c5; }
+  .result b { display:block; margin-bottom:6px; }
+  .result .size { font-size:22px; font-weight:700; }
+  .result a { display:inline-block; margin-top:10px; padding:10px 16px; background:var(--ok); color:#fff; border-radius:8px; text-decoration:none; font-weight:600; }
+  .hint { font-size:13px; color:var(--muted); margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Сжать PDF под лимит</h1>
+  <p class="sub">Текст сохраняется, сжимаются только изображения. Файл не покидает браузер.</p>
+  <div class="card">
+    <label for="file">Ваш PDF</label>
+    <input type="file" id="file" accept="application/pdf">
+    <div style="margin-top:14px">
+      <label for="limit">Лимит приёмной системы</label>
+      <select id="limit">
+        <option value="2">ФНС — 2 МБ</option>
+        <option value="5" selected>Госуслуги — 5 МБ</option>
+        <option value="10">Вуз — 10 МБ</option>
+        <option value="30">Суд / Мой арбитр — 30 МБ</option>
+      </select>
+    </div>
+    <button id="go" disabled>Сжать</button>
+    <div class="status" id="status"></div>
+    <div class="result" id="result"></div>
+  </div>
+  <p class="hint">Обработка локальная (Ghostscript в WebAssembly): файл не покидает устройство. Текст и вектор остаются векторными; даунсемплинг только у растровых картинок.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script>
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+}
+const GS_CDN = 'https://cdn.jsdelivr.net/gh/laurentmmeyer/ghostscript-pdf-compress.wasm@master/src/lib/';
+const DPIS = [150, 120, 96, 72];   // ниже 72 dpi не спускаемся — порог читаемости
+
+// Один прогон gs в отдельном воркере (схема, проверенная на тесте).
+function gsRun(inputBytes, dpi) {
+  const args = [
+    '-sDEVICE=pdfwrite',
+    '-dCompatibilityLevel=1.5',
+    '-dPDFSETTINGS=/ebook',
+    '-dDownsampleColorImages=true', '-dColorImageResolution=' + dpi, '-dColorImageDownsampleType=/Bicubic',
+    '-dDownsampleGrayImages=true', '-dGrayImageResolution=' + dpi,
+    '-dDownsampleMonoImages=true', '-dMonoImageResolution=' + dpi,
+    '-dAutoRotatePages=/None',
+    '-dNOPAUSE', '-dQUIET', '-dBATCH',
+    '-sOutputFile=output.pdf', 'input.pdf'
+  ];
+  const src = [
+    "self.Module={locateFile:function(p){return '" + GS_CDN + "'+p;},preRun:[function(){self.Module.FS.writeFile('input.pdf',new Uint8Array(self.__input));}],postRun:[function(){var u=self.Module.FS.readFile('output.pdf',{encoding:'binary'});var buf=(u.byteOffset===0&&u.byteLength===u.buffer.byteLength)?u.buffer:u.slice().buffer;self.postMessage({ok:true,size:buf.byteLength,bytes:buf},[buf]);}],arguments:" + JSON.stringify(args) + ",print:function(){},printErr:function(){},noExitRuntime:1};",
+    "self.onmessage=async function(e){self.__input=e.data;try{await import('" + GS_CDN + "gs-worker.js');}catch(err){self.postMessage({err:String(err)});}};"
+  ].join("");
+  const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  return new Promise(function (resolve, reject) {
+    const to = setTimeout(function () { try { w.terminate(); } catch (e) {} reject(new Error('gs timeout')); }, 90000);
+    w.onmessage = function (ev) {
+      clearTimeout(to); w.terminate();
+      const d = ev.data;
+      if (d.err) reject(new Error(d.err)); else resolve(new Uint8Array(d.bytes));
+    };
+    w.onerror = function (ev) { clearTimeout(to); try { w.terminate(); } catch (e) {} reject(new Error('worker error: ' + (ev.message || ''))); };
+    const ab = inputBytes.buffer.slice(inputBytes.byteOffset, inputBytes.byteOffset + inputBytes.byteLength);
+    w.postMessage(ab, [ab]);
+  });
+}
+
+// Качественное сжатие: перебор DPI до попадания в лимит; текст не растрируется.
+async function compressPdfQuality(inputBytes, targetBytes, onStep) {
+  const src = inputBytes instanceof Uint8Array ? inputBytes : new Uint8Array(inputBytes);
+  if (src.length <= targetBytes) return { bytes: src, dpi: null, mode: 'already fits' };
+  let best = { bytes: src, dpi: null, mode: 'original' };
+  for (const dpi of DPIS) {
+    if (onStep) onStep(dpi);
+    let out;
+    try { out = await gsRun(src, dpi); } catch (e) { continue; }
+    if (out.length < best.bytes.length) best = { bytes: out, dpi: dpi, mode: 'gs ' + dpi + 'dpi' };
+    if (out.length <= targetBytes) return { bytes: out, dpi: dpi, mode: 'gs ' + dpi + 'dpi' };
+  }
+  return best;
+}
+
+// ---- UI ----
+(function () {
+  const fileEl = document.getElementById('file');
+  const goEl = document.getElementById('go');
+  const statusEl = document.getElementById('status');
+  const resultEl = document.getElementById('result');
+  let buf = null;
+
+  fileEl.addEventListener('change', async () => {
+    const f = fileEl.files[0];
+    if (!f) { goEl.disabled = true; return; }
+    buf = new Uint8Array(await f.arrayBuffer());
+    goEl.disabled = false;
+    statusEl.textContent = 'Загружен: ' + f.name + ', ' + (buf.length / 1048576).toFixed(2) + ' МБ';
+  });
+
+  goEl.addEventListener('click', async () => {
+    if (!buf) return;
+    const limitMb = parseInt(document.getElementById('limit').value, 10);
+    const target = limitMb * 1024 * 1024;
+    goEl.disabled = true;
+    resultEl.style.display = 'none';
+    statusEl.textContent = 'Готовлю сжиматель (первый запуск грузит ~13 МБ)…';
+    try {
+      const t0 = performance.now();
+      const res = await compressPdfQuality(buf, target, function (dpi) { statusEl.textContent = 'Сжимаю, пробую ' + dpi + ' dpi…'; });
+      const dt = Math.round(performance.now() - t0);
+      const outDoc = await PDFLib.PDFDocument.load(res.bytes);
+      const fits = res.bytes.length <= target;
+      const blob = new Blob([res.bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      resultEl.className = 'result' + (fits ? '' : ' bad');
+      resultEl.innerHTML = '<b>' + (fits ? 'Готово — файл в лимит' : 'Не удалось уложиться при читаемом качестве') + '</b>' +
+        '<div class="size">' + (res.bytes.length / 1048576).toFixed(2) + ' МБ ' + (fits ? '≤ ' + limitMb + ' МБ' : '> ' + limitMb + ' МБ') + '</div>' +
+        '<div class="hint">Режим: ' + res.mode + ' · страниц: ' + outDoc.getPageCount() + ' · ' + dt + ' мс</div>' +
+        (fits ? '<a href="' + url + '" download="compressed-' + limitMb + 'mb.pdf">Скачать PDF</a>' : '');
+      resultEl.style.display = 'block';
+      statusEl.textContent = '';
+    } catch (e) {
+      statusEl.textContent = 'Ошибка: ' + (e && e.message ? e.message : e);
+    } finally {
+      goEl.disabled = false;
+    }
+  });
+})();
+
+// ---- Автотест: текст+шум -> качественное сжатие, проверяем сохранение текста ----
+window.__qtest = async function (targetMb, pages, w, h) {
+  const target = (targetMb || 1) * 1024 * 1024;
+  const { PDFDocument, StandardFonts } = PDFLib;
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (let i = 0; i < (pages || 1); i++) {
+    const p = doc.addPage([595, 842]);
+    for (let l = 0; l < 30; l++) p.drawText('Line ' + l + ' selectable text of page ' + i, { x: 40, y: 800 - l * 22, size: 11, font: font });
+    const c = document.createElement('canvas'); c.width = w || 1000; c.height = h || 1200;
+    const ctx = c.getContext('2d');
+    const im = ctx.createImageData(c.width, c.height);
+    for (let k = 0; k < im.data.length; k += 4) { const v = (Math.random() * 255) | 0; im.data[k] = v; im.data[k + 1] = v; im.data[k + 2] = v; im.data[k + 3] = 255; }
+    ctx.putImageData(im, 0, 0);
+    const jpg = await doc.embedJpg((function (b64) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let j = 0; j < bin.length; j++) a[j] = bin.charCodeAt(j); return a; })(c.toDataURL('image/jpeg', 0.95).split(',')[1]));
+    p.drawImage(jpg, { x: 40, y: 120, width: 480, height: 480 });
+  }
+  const input = await doc.save();
+  const t0 = performance.now();
+  const res = await compressPdfQuality(input, target);
+  const dt = Math.round(performance.now() - t0);
+  let textChars = 0, outPages = 0;
+  try {
+    const pd = await pdfjsLib.getDocument({ data: res.bytes.slice(0) }).promise;
+    outPages = pd.numPages;
+    let t = '';
+    for (let i = 1; i <= pd.numPages; i++) { const pg = await pd.getPage(i); const tc = await pg.getTextContent(); t += tc.items.map(function (x) { return x.str; }).join(' '); }
+    textChars = t.trim().length;
+  } catch (e) { textChars = -1; }
+  return { inSize: input.length, outSize: res.bytes.length, fits: res.bytes.length <= target, mode: res.mode, ms: dt, outPages: outPages, textChars: textChars };
+};
+</script>
+</body>
+</html>
